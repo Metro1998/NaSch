@@ -10,6 +10,8 @@ config.p_slowdown = 0.3
 config.pause_time = 0.3
 config.cell_size = 5
 config.conflict_zone = 90
+config.mu = 16.5 / 300
+config.peak_period = True
 
 if __name__ == '__main__':
     NaSch = NaSch(config=config)

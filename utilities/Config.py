@@ -13,3 +13,5 @@ class Config(object):
         self.pause_time = None  # Interval of refreshment
         self.cell_size = None  # The size of cell
         self.conflict_zone = None  # The index of the first cell of conflict zone
+        self.mu = None  # Mu in poisson distribution
+        self.peak_period = True  # Signature to demonstrate whether is peak period now
