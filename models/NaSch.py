@@ -3,6 +3,7 @@
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import random
 import numpy as np
 import copy
@@ -21,6 +22,9 @@ class NaSch(object):
         self.cell_size = config.cell_size
         self.conflict_zone = config.conflict_zone
 
+        self.fig = plt.figure(figsize=(21, 3),
+                              dpi=96,
+                              )
         self.link = []
         # The occupation of the road is stored in self.link
         # The elements of the list will be the speed of the car otherwise None
@@ -28,18 +32,26 @@ class NaSch(object):
 
     def plot(self, indices, time_step):
         """ Plot the initial space and cells """
-        xlabel = np.linspace(-0.5, self.num_of_cells + 0.5, num=self.num_of_cells + 2)
-        ylabel = np.tile(np.array([-0.04, 0.04]), (self.num_of_cells + 2, 1))
-        plt.plot(xlabel, ylabel, '-b')
-        for _ in xlabel:
-            plt.plot([_, _], [-0.04, 0.04], '-b')
+        ax = self.fig.add_subplot()
+        ax.set(title='Time Step-{}'.format(time_step), xlim=[-5, 105], ylim=[-0.5, 0.5])
+        plt.tight_layout()
 
-        plt.axis([-5, 105, -1, 1])
-        plt.plot(indices, [0] * len(indices), 'sk', markersize=self.cell_size)
-        plt.xlabel('time_step' + str(time_step))
+        x_label = np.linspace(-0.5, self.num_of_cells + 0.5, num=self.num_of_cells + 2)
+        y_label = np.tile(np.array([-0.04, 0.04]), (self.num_of_cells + 2, 1))
+        ax.plot(x_label, y_label, color='gray')
+        for _ in x_label:
+            ax.plot([_, _], [-0.04, 0.04], color='gray')
+
+        x_label_ = np.linspace(self.conflict_zone - 0.5, self.conflict_zone + 3.5, num=5)
+        y_label_ = np.tile(np.array([-0.05, 0.05]), (5, 1))
+        ax.plot(x_label_, y_label_, color='orange', linestyle='dashed')
+        for _ in x_label_:
+            ax.plot([_, _], [-0.05, 0.05], color='orange', linestyle='dashed')
+
+        ax.plot(indices, [0] * len(indices), 'sk', markersize=self.cell_size)
+        # self.ax.tight_layout()
         plt.pause(self.pause_time)
-        plt.cla()
-
+        ax.cla()
 
     def get_empty_front(self, index_of_cell):
         """ Get the number of empty cells in front of one specific vehicle. """
@@ -100,21 +112,3 @@ class NaSch(object):
             indices = [inx for inx, val in enumerate(self.link) if val is not None]
             print(indices)
             self.plot(indices=indices, time_step=t)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
