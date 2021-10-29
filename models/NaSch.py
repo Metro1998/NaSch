@@ -13,61 +13,84 @@ class NaSch(object):
 
     def __init__(self, config):
         self.num_of_cells = config.num_of_cells
-        self.num_of_cars = config.num_of_cars
+        self.num_of_vehicles = config.num_of_vehicles
         self.max_time_step = config.max_time_step
         self.max_speed = config.max_speed
         self.p_slowdown = config.p_slowdown
         self.pause_time = config.pause_time
         self.cell_size = config.cell_size
+        self.conflict_zone = config.conflict_zone
 
         self.link = []
         # The occupation of the road is stored in self.link
         # The elements of the list will be the speed of the car otherwise None
-        self.link_index = list(np.arange(self.num_of_cells))
+        self.link_index = list(np.arange(self.conflict_zone - 10))
 
-    def plot_space(self):
-        """ Plot the initial space. """
-        xlabel = np.linspace(-0.5, self.num_of_cells + 0.5, num=self.num_of_cells + 1)
-        ylabel = np.tile(np.array([-0.5, 0.5]), (self.num_of_cells + 1, 1))
-        plt.plot(xlabel, ylabel)
-        plt.axis([-0.5, self.num_of_cells + 0.5, -0.5, 0.5])
-        # Disable xticks and yticks
-        plt.xticks([])
-        plt.yticks([])
+    def plot(self, indices, time_step):
+        """ Plot the initial space and cells """
+        xlabel = np.linspace(-0.5, self.num_of_cells + 0.5, num=self.num_of_cells + 2)
+        ylabel = np.tile(np.array([-0.04, 0.04]), (self.num_of_cells + 2, 1))
+        plt.plot(xlabel, ylabel, '-b')
+        for _ in xlabel:
+            plt.plot([_, _], [-0.04, 0.04], '-b')
+
+        plt.axis([-5, 105, -1, 1])
+        plt.plot(indices, [0] * len(indices), 'sk', markersize=self.cell_size)
+        plt.xlabel('time_step' + str(time_step))
+        plt.pause(self.pause_time)
+        plt.cla()
+
 
     def get_empty_front(self, index_of_cell):
-        """ Get the number of empty cells in front of one specific car. """
-        link2 = self.link * 2
-        # We suppose that cars drive away from the road will come back to road again
-        num = 0
-        i = 1
-        while link2[index_of_cell + i] is None:
-            num += 1
-            i += 1
-        return num
+        """ Get the number of empty cells in front of one specific vehicle. """
+        num_vehicles_front = 0
 
-    def initialization(self):
+        indices = [inx for inx, val in enumerate(self.link) if val is not None]
+
+        # If the vehicle is in front all of the others, return 0.
+        if index_of_cell == max(indices):
+            num_vehicles_front = 0
+        else:
+            for _ in indices:
+                if index_of_cell == _:
+                    num_vehicles_front = indices[indices.index(_) + 1] - _
+
+        return num_vehicles_front
+
+    def initialization(self):  # TODO
         """ Initialization, we will randomly pick some cells, in which cars will be deployed with random speed. """
-        self.plot_space()
         self.link = [None] * self.num_of_cells
-        indices = random.sample(self.link_index, self.num_of_cars)
+        indices = random.sample(self.link_index, k=self.num_of_vehicles)
         for i in indices:
             self.link[i] = random.randint(0, self.max_speed)
 
     def nasch_process(self):
+        """
+
+        :return:
+        """
+
         for t in range(0, self.max_time_step):
-            indices = [inx for inx, val in enumerate(self.link) if val is not None]
-            for cell in indices:
-                # Acceleration
-                self.link[cell] = min(self.link[cell] + 1, self.max_speed)
-                # Deceleration
-                self.link[cell] = min(self.link[cell], self.get_empty_front(index_of_cell=cell))
-                # Randomly_slow_down
-                if random.random() <= self.p_slowdown:
-                    self.link[cell] = max(self.link[cell] - 1, 0)
+            for cell in [inx for inx, val in enumerate(self.link) if val is not None]:
+                if cell < self.conflict_zone:
+                    # Step1 acceleration
+                    self.link[cell] = min(self.link[cell] + 1, self.max_speed)
+                    # Step2 deceleration
+                    self.link[cell] = min(self.link[cell], self.get_empty_front(index_of_cell=cell))
+                    # Randomly_slow_down
+                    if random.random() <= self.p_slowdown:
+                        self.link[cell] = max(self.link[cell] - 1, 0)
+                else:
+                    # 限制冲突区内最大速度为2
+                    self.link[cell] = min(self.link[cell], 2)
+                    # 冲突区内不能加速
+                    if random.random() <= 0.5:  # TODO
+                        self.link[cell] = 1
+
             link_ = [None] * self.num_of_cells
-            for cell in indices:
+            for cell in [inx for inx, val in enumerate(self.link) if val is not None]:
                 index_ = cell + self.link[cell]
+                # 离去规则
                 if index_ >= self.num_of_cells:
                     index_ -= self.num_of_cells
                 link_[index_] = self.link[cell]
@@ -75,10 +98,9 @@ class NaSch(object):
 
             # Plot the image
             indices = [inx for inx, val in enumerate(self.link) if val is not None]
-            plt.plot(indices, [0] * self.num_of_cars, 'sk', markersize = self.cell_size)
-            plt.xlabel('time_step' + str(t))
-            plt.pause(self.pause_time)
-            plt.cla()
+            print(indices)
+            self.plot(indices=indices, time_step=t)
+
 
 
 

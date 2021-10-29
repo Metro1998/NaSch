@@ -6,9 +6,10 @@ class Config(object):
 
     def __init__(self):
         self.num_of_cells = None  # The length of the road
-        self.num_of_cars = None   # The number of cars in space
-        self.max_time_step = None # Maximum time step
-        self.max_speed = None     # Maximum speed a car could reach
-        self.p_slowdown = None    # Possibility of randomly slowing down
-        self.pause_time = None    # Interval of refreshment
-        self.cell_size = None     # The size of cell
+        self.num_of_vehicles = None  # The number of vehicles in space
+        self.max_time_step = None  # Maximum time step
+        self.max_speed = None  # Maximum speed a car could reach
+        self.p_slowdown = None  # Possibility of randomly slowing down
+        self.pause_time = None  # Interval of refreshment
+        self.cell_size = None  # The size of cell
+        self.conflict_zone = None  # The index of the first cell of conflict zone
