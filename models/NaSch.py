@@ -25,7 +25,25 @@ class NaSch(object):
         self.mu = config.mu
         self.peak_period = config.peak_period
 
+        self.n_peak = config.distribution_parameters['n_peak']
+        self.n_flat = config.distribution_parameters['n_flat']
+        self.p_peak = config.distribution_parameters['p_peak']
+        self.p_flat = config.distribution_parameters['p_flat']
+
+        self.ld_pedestrian_first = config.game_ld_parameters['pedestrian_first']
+        self.ld_vehicle_first = config.game_ld_parameters['vehicle_first']
+        self.ld_compromise = config.game_ld_parameters['compromise']
+        self.ld_conflict = config.game_ld_parameters['conflict']
+
+        self.sd_pedestrian_first = config.game_sd_parameters['pedestrian_first']
+        self.sd_vehicle_first = config.game_sd_parameters['vehicle_first']
+        self.sd_compromise = config.game_sd_parameters['compromise']
+        self.sd_conflict = config.game_sd_parameters['conflict']
+
+
+
         np.random.seed(0)
+        self.pedestrian_lock_time = 0  # 行人锁时间
 
         self.fig = plt.figure(figsize=(21, 3),
                               dpi=96,
@@ -90,30 +108,10 @@ class NaSch(object):
         """
 
         for t in range(0, self.max_time_step):
-            for cell in [inx for inx, val in enumerate(self.link) if val is not None]:
-                if cell < self.conflict_zone:
-                    # Step1 acceleration
-                    self.link[cell] = min(self.link[cell] + 1, self.max_speed)
-                    # Step2 deceleration
-                    self.link[cell] = min(self.link[cell], self.get_empty_front(index_of_cell=cell))
-                    # Randomly_slow_down
-                    if random.random() <= self.p_slowdown:
-                        self.link[cell] = max(self.link[cell] - 1, 0)
-                else:
-                    # 限制冲突区内最大速度为2
-                    self.link[cell] = min(self.link[cell], 2)
-                    # 冲突区内不能加速
-                    if random.random() <= 0.5:  # TODO
-                        self.link[cell] = 1
-
-            link_ = [None] * self.num_of_cells
-            for cell in [inx for inx, val in enumerate(self.link) if val is not None]:
-                index_ = cell + self.link[cell]
-                # 离去规则
-                if index_ >= self.num_of_cells:
-                    index_ -= self.num_of_cells
-                link_[index_] = self.link[cell]
-            self.link = copy.deepcopy(link_)
+            self.vehicle_arrival()
+            self.pedestrian_arrival()
+            self.advance_update()
+            self.conflict_update()
 
             # Plot the image
             indices = [inx for inx, val in enumerate(self.link) if val is not None]
@@ -136,7 +134,7 @@ class NaSch(object):
             link_[index_] = self.link[cell]
         self.link = copy.deepcopy(link_)
 
-    def exoteric(self):
+    def exoteric_update(self):
         """
         开放条件更新规则，指车辆直接穿过人行横道，并在达到终点时被移除（特指更新后超过了车道的最大值）
 
@@ -177,10 +175,84 @@ class NaSch(object):
     def pedestrian_arrival(self):
         """
         高峰时段和平峰时段一致，用拟合出来的负二项分布进行行人生成
+        行人生成的影响比较小，其作用只是确定行人锁是否持续
 
         :return:
         """
-        prob = nbinom.pmf()
+        if self.peak_period:
+            prob = nbinom.pmf(k=np.arange(0, 3, 1), n=self.n_peak, p=self.p_peak)
+            prob = [1 - prob[1] - prob[2], prob[1], prob[2]]
+        else:
+            prob = nbinom.pmf(k=np.arange(0, 3, 1), n=self.n_flat, p=self.p_flat)
+            prob = [1 - prob[1] - prob[2], prob[1], prob[2]]
+        num_pedestrians = np.random.choice(np.arange(0, 3, 1), p=prob)
+        if num_pedestrians == 0:
+            pass
+        else:
+            if self.pedestrian_lock_time > 0:
+                self.pedestrian_lock_time += 2
+            else:  # TODO
+
+    def advance_update(self):
+        """
+
+        :return:
+        """
+        indices = [inx for inx, val in enumerate(self.link) if val is not None]
+        for cell in indices:
+            if cell < self.conflict_zone:
+                # Step1 acceleration
+                self.link[cell] = min(self.link[cell] + 1, self.max_speed)
+                # Step2 deceleration
+                self.link[cell] = min(self.link[cell], self.get_empty_front(index_of_cell=cell))
+                # Randomly_slow_down
+                if random.random() <= self.p_slowdown:
+                    self.link[cell] = max(self.link[cell] - 1, 0)
+            else:
+                # 限制冲突区内最大速度为2
+                self.link[cell] = min(self.link[cell], 2)
+                # 冲突区内不能加速
+                # if random.random() <= 0.5:  # TODO
+                #    self.link[cell] = 1
+
+    def conflict_update(self):
+        """
+
+        :return:
+        """
+        indices = [inx for inx, val in enumerate(self.link) if val is not None]
+        if self.pedestrian_lock_time > 0:
+            self.closed_update()
+        else:
+            if indices[-1] == self.conflict_zone + 2:  # 与人行横道的距离为0
+                if self.link[indices[-1]] == 0:  # 车辆速度为0，行人先行
+                    self.pedestrian_lock_time += 2  # 行人时间锁加2s
+                    self.closed_update()
+                else:
+                    self.exoteric_update()
+            if indices[-1] == self.conflict_zone + 1:  # 与人行横道的距离为1
+                if self.link[indices[-1]] == 0:  # 车辆速度为0，行人先行
+                    self.pedestrian_lock_time += 2
+                    self.closed_update()
+                if self.link[indices[-1]] == 1:
+                # TODO
+                if self.link[indices[-1]] == 2:
+                    self.exoteric_update()
+            if indices[-1] == self.conflict_zone  # 与人行横道的距离为2
+                if self.link[indices[-1]] == 2:
+                # TODO
+                else:
+                    self.pedestrian_lock_time += 2
+                    self.closed_update()
+
+
+
+
+
+
+
+
+
 
 
 

@@ -15,3 +15,6 @@ class Config(object):
         self.conflict_zone = None  # The index of the first cell of conflict zone
         self.mu = None  # Mu in poisson distribution
         self.peak_period = True  # Signature to demonstrate whether is peak period now
+        self.distribution_parameters = None
+        self.game_ld_parameters = None
+        self.game_sd_parameters = None
