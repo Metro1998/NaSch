@@ -43,13 +43,18 @@ class NaSch(object):
         np.random.seed(0)
         self.pedestrian_lock_time = 2  # 行人锁时间
 
-        self.fig = plt.figure(figsize=(16, 3),
+        self.fig = plt.figure(figsize=(8, 3),
                               dpi=96,
                               )
         self.link = [None] * self.num_of_cells
         # The occupation of the road is stored in self.link
         # The elements of the list will be the speed of the car otherwise None
         self.link_index = list(np.arange(self.conflict_zone - 10))
+        self.total_travel_time = 0
+        self.total_vehicles = 0
+        self.total_vehicles_present = 0
+        self.conflict = 0
+        self.give_away = 0
 
     def plot(self, indices, time_step):
         """ Plot the initial space and cells """
@@ -109,7 +114,7 @@ class NaSch(object):
             self.vehicle_arrival()
             self.pedestrian_arrival()
             self.advance_update()
-            print('行人锁时间：{}'.format(self.pedestrian_lock_time))
+            self.total_travel_time += self.total_vehicles_present
             self.conflict_update()
             if self.pedestrian_lock_time > 0:
                 self.pedestrian_lock_time -= 1
@@ -118,16 +123,17 @@ class NaSch(object):
             # Plot the image
             self.plot(indices=indices, time_step=t)
 
+        print('车均行程时间为：{}'.format(self.total_travel_time / self.total_vehicles))
+        print('车均让行率为：{}'.format(self.give_away / self.conflict))
+
     def closed_update(self):
         """
         封闭条件更新规则，指车辆在人行横道前停止，后车开始排队，所有车辆无法驶离
 
         :return:
         """
-        print('0')
         link_ = [None] * self.num_of_cells
         indices = [inx for inx, val in enumerate(self.link) if val is not None]
-        print(self.link)
 
         if indices[-1] == self.conflict_zone + 2:
             self.link[indices[-1]] = 0  # 如果正好在人行横道前，停车
@@ -137,7 +143,6 @@ class NaSch(object):
             index_ = cell + self.link[cell]
             link_[index_] = self.link[cell]
         self.link = copy.deepcopy(link_)
-        print(self.link)
 
     def exoteric_update(self):
         """
@@ -145,15 +150,14 @@ class NaSch(object):
 
         :return:
         """
-        print('1')
         link_ = [None] * self.num_of_cells
         indices = [inx for inx, val in enumerate(self.link) if val is not None]
         # 最前面一车辆，考虑其更新后的位置，如果超过了车道最大长度，移除
         for i in range(len(indices)):
             if (indices[-1] + self.link[indices[-1]]) > self.num_of_cells - 1:
                 indices.pop()  # 移除最后一个元素（车辆）
+                self.total_vehicles_present -= 1
         for cell in indices:
-            print(indices)
             index_ = cell + self.link[cell]
             link_[index_] = self.link[cell]
         self.link = copy.deepcopy(link_)
@@ -180,15 +184,21 @@ class NaSch(object):
                 if self.link[0] is not None:
                     pass
                 else:
-                    self.link[0] = 2
+                    self.link[0] = 0
+                    self.total_vehicles += 1
+                    self.total_vehicles_present += 1
             if num_vehicles == 2:
                 if self.link[0] is not None:
                     pass
                 if self.link[1] is not None and self.link[0] is None:
-                    self.link[0] = 2
+                    self.link[0] = 0
+                    self.total_vehicles += 1
+                    self.total_vehicles_present += 1
                 if self.link[0] is None and self.link[1] is None:
-                    self.link[0] = 2
-                    self.link[1] = 2
+                    self.link[0] = 0
+                    self.link[1] = 0
+                    self.total_vehicles += 2
+                    self.total_vehicles_present += 2
 
     def pedestrian_arrival(self):
         """
@@ -219,19 +229,18 @@ class NaSch(object):
         """
         indices = [inx for inx, val in enumerate(self.link) if val is not None]
         for cell in indices:
-            if cell < self.conflict_zone:
-                # Step1 acceleration
-                self.link[cell] = min(self.link[cell] + 1, self.max_speed)
-                # Step2 deceleration
-                self.link[cell] = min(self.link[cell], self.get_empty_front(index_of_cell=cell))
-                # Randomly_slow_down
-                if random.random() <= self.p_slowdown:
-                    self.link[cell] = max(self.link[cell] - 1, 0)
-            else:
+            # Step1 acceleration
+            self.link[cell] = min(self.link[cell] + 1, self.max_speed)
+            # Step2 deceleration
+            self.link[cell] = min(self.link[cell], self.get_empty_front(index_of_cell=cell))
+            # Randomly_slow_down
+            if random.random() <= self.p_slowdown:
+                self.link[cell] = max(self.link[cell] - 1, 0)
+            if cell >= self.conflict_zone:
                 if self.link[cell] != 0:
                     # 限制冲突区内最大速度为2，且不能加速
                     self.link[cell] = min(self.link[cell], 2)
-                else:  # 如果之前的速度为0，下一时间步启动，其速度为1
+                if cell == indices[-1] and self.link[cell] == 0:  # 如果之前的速度为0，下一时间步启动，其速度为1
                     self.link[cell] = 1
 
     def conflict_update(self):
@@ -242,7 +251,6 @@ class NaSch(object):
         indices = [inx for inx, val in enumerate(self.link) if val is not None]
         if len(indices) != 0:
             if indices[-1] < self.conflict_zone:
-                print('情况0')
                 self.exoteric_update()
                 if self.waiting_pedestrian > 0:
                     self.pedestrian_lock_time += 3
@@ -252,35 +260,34 @@ class NaSch(object):
                     self.closed_update()
                 else:
                     if self.waiting_pedestrian > 0:
+                        self.conflict += 1
                         if indices[-1] == self.conflict_zone + 2:  # 与人行横道的距离为0
-                            print('情况1')
                             if self.link[indices[-1]] == 0:  # 车辆速度为0，行人先行
                                 self.pedestrian_lock_time += 3  # 行人时间锁加3s
                                 self.waiting_pedestrian = 0  # 清空等待的行人
                                 self.closed_update()
+                                self.give_away += 1
                             else:
                                 self.exoteric_update()
                         elif indices[-1] == self.conflict_zone + 1:  # 与人行横道的距离为1
-                            print('情况2')
                             if self.link[indices[-1]] == 0:  # 车辆速度为0，行人先行
                                 self.pedestrian_lock_time += 3
                                 self.waiting_pedestrian = 0  # 清空等待的行人
                                 self.closed_update()
+                                self.give_away += 1
                             if self.link[indices[-1]] == 1:
                                 self.short_distance_low_velocity_conflict()
                             if self.link[indices[-1]] == 2:
-                                print('情况4')
                                 self.exoteric_update()
                         elif indices[-1] == self.conflict_zone:  # 与人行横道的距离为2
-                            print('情况3')
                             if self.link[indices[-1]] == 2:
                                 self.long_distance_high_velocity_conflict()
                             else:
                                 self.pedestrian_lock_time += 3
                                 self.waiting_pedestrian = 0  # 清空等待的行人
                                 self.closed_update()
+                                self.give_away += 1
                         else:
-                            print('情况5')
                             self.exoteric_update()
                     else:
                         self.exoteric_update()
@@ -296,19 +303,22 @@ class NaSch(object):
         signature = np.random.choice(np.arange(0, 4, 1), p=prob)
         if signature == 0:
             self.link[indices[-1]] = 1  # 长距离高速互让，车辆减速，因此在这个时间步内车辆速度减为1，到下一时间步自然为短距离低速冲突
-            self.exoteric_update()
+            self.closed_update()
+            self.give_away += 1
         if signature == 1:
             self.link[indices[-1]] = None  # 释放最前面的车辆
             indices = [inx for inx, val in enumerate(self.link) if val is not None]
             if len(indices) != 0:
                 self.closed_update()
-            self.closed_update()
+            self.total_travel_time += 5
+            self.total_vehicles_present -= 1
         if signature == 2:
             self.exoteric_update()
         if signature == 3:
             self.pedestrian_lock_time += 3
             self.waiting_pedestrian = 0  # 清空等待的行人
             self.closed_update()
+            self.give_away += 1
 
     def short_distance_low_velocity_conflict(self):
         """
@@ -321,12 +331,16 @@ class NaSch(object):
         signature = np.random.choice(np.arange(0, 4, 1), p=prob)
         if signature == 0:
             self.closed_update()
+            self.give_away += 1
         if signature == 1:
             self.link[indices[-1]] = None  # 释放最前面的车辆
             self.closed_update()
+            self.total_travel_time += 5
+            self.total_vehicles_present -= 1
         if signature == 2:
             self.exoteric_update()
         if signature == 3:
             self.pedestrian_lock_time += 3
             self.waiting_pedestrian = 0  # 清空等待的行人
             self.closed_update()
+            self.give_away += 1
