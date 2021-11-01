@@ -124,7 +124,9 @@ class NaSch(object):
             self.plot(indices=indices, time_step=t)
 
         print('车均行程时间为：{}'.format(self.total_travel_time / self.total_vehicles))
-        print('车均让行率为：{}'.format(self.give_away / self.conflict))
+        print(self.give_away)
+        print(self.conflict)
+        return self.total_travel_time / self.total_vehicles
 
     def closed_update(self):
         """
@@ -260,7 +262,7 @@ class NaSch(object):
                     self.closed_update()
                 else:
                     if self.waiting_pedestrian > 0:
-                        self.conflict += 1
+
                         if indices[-1] == self.conflict_zone + 2:  # 与人行横道的距离为0
                             if self.link[indices[-1]] == 0:  # 车辆速度为0，行人先行
                                 self.pedestrian_lock_time += 3  # 行人时间锁加3s
@@ -298,6 +300,7 @@ class NaSch(object):
 
         :return:
         """
+        self.conflict += 1
         indices = [inx for inx, val in enumerate(self.link) if val is not None]
         prob = [self.ld_compromise, self.ld_conflict, self.ld_vehicle_first, self.ld_pedestrian_first]
         signature = np.random.choice(np.arange(0, 4, 1), p=prob)
@@ -326,6 +329,7 @@ class NaSch(object):
 
         :return:
         """
+        self.conflict += 1
         indices = [inx for inx, val in enumerate(self.link) if val is not None]
         prob = [self.sd_compromise, self.sd_conflict, self.sd_vehicle_first, self.sd_pedestrian_first]
         signature = np.random.choice(np.arange(0, 4, 1), p=prob)
